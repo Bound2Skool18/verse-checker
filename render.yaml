@@ -5,6 +5,7 @@ services:
     plan: free
     region: oregon
     dockerfilePath: ./Dockerfile
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 1800
     envVars:
       - key: PORT
         value: 8000
