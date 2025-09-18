@@ -1,0 +1,152 @@
+[
+  {
+    "book": "John",
+    "chapter": 3,
+    "verse": 16,
+    "text": "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life."
+  },
+  {
+    "book": "Genesis",
+    "chapter": 1,
+    "verse": 1,
+    "text": "In the beginning God created the heaven and the earth."
+  },
+  {
+    "book": "Psalm",
+    "chapter": 23,
+    "verse": 1,
+    "text": "The LORD is my shepherd; I shall not want."
+  },
+  {
+    "book": "Romans",
+    "chapter": 3,
+    "verse": 23,
+    "text": "For all have sinned, and come short of the glory of God;"
+  },
+  {
+    "book": "Romans",
+    "chapter": 6,
+    "verse": 23,
+    "text": "For the wages of sin is death; but the gift of God is eternal life through Jesus Christ our Lord."
+  },
+  {
+    "book": "Ephesians",
+    "chapter": 2,
+    "verse": 8,
+    "text": "For by grace are ye saved through faith; and that not of yourselves: it is the gift of God:"
+  },
+  {
+    "book": "Ephesians",
+    "chapter": 2,
+    "verse": 9,
+    "text": "Not of works, lest any man should boast."
+  },
+  {
+    "book": "Philippians",
+    "chapter": 4,
+    "verse": 13,
+    "text": "I can do all things through Christ which strengtheneth me."
+  },
+  {
+    "book": "1 John",
+    "chapter": 1,
+    "verse": 9,
+    "text": "If we confess our sins, he is faithful and just to forgive us our sins, and to cleanse us from all unrighteousness."
+  },
+  {
+    "book": "Matthew",
+    "chapter": 28,
+    "verse": 19,
+    "text": "Go ye therefore, and teach all nations, baptizing them in the name of the Father, and of the Son, and of the Holy Ghost:"
+  },
+  {
+    "book": "John",
+    "chapter": 14,
+    "verse": 6,
+    "text": "Jesus saith unto him, I am the way, the truth, and the life: no man cometh unto the Father, but by me."
+  },
+  {
+    "book": "Jeremiah",
+    "chapter": 29,
+    "verse": 11,
+    "text": "For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end."
+  },
+  {
+    "book": "Proverbs",
+    "chapter": 3,
+    "verse": 5,
+    "text": "Trust in the LORD with all thine heart; and lean not unto thine own understanding."
+  },
+  {
+    "book": "Proverbs",
+    "chapter": 3,
+    "verse": 6,
+    "text": "In all thy ways acknowledge him, and he shall direct thy paths."
+  },
+  {
+    "book": "Isaiah",
+    "chapter": 40,
+    "verse": 31,
+    "text": "But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint."
+  },
+  {
+    "book": "Romans",
+    "chapter": 8,
+    "verse": 28,
+    "text": "And we know that all things work together for good to them that love God, to them who are the called according to his purpose."
+  },
+  {
+    "book": "2 Timothy",
+    "chapter": 3,
+    "verse": 16,
+    "text": "All scripture is given by inspiration of God, and is profitable for doctrine, for reproof, for correction, for instruction in righteousness:"
+  },
+  {
+    "book": "Hebrews",
+    "chapter": 11,
+    "verse": 1,
+    "text": "Now faith is the substance of things hoped for, the evidence of things not seen."
+  },
+  {
+    "book": "1 Corinthians",
+    "chapter": 13,
+    "verse": 4,
+    "text": "Charity suffereth long, and is kind; charity envieth not; charity vaunteth not itself, is not puffed up,"
+  },
+  {
+    "book": "1 Corinthians",
+    "chapter": 13,
+    "verse": 13,
+    "text": "And now abideth faith, hope, charity, these three; but the greatest of these is charity."
+  },
+  {
+    "book": "Matthew",
+    "chapter": 6,
+    "verse": 33,
+    "text": "But seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you."
+  },
+  {
+    "book": "James",
+    "chapter": 1,
+    "verse": 17,
+    "text": "Every good gift and every perfect gift is from above, and cometh down from the Father of lights, with whom is no variableness, neither shadow of turning."
+  },
+  {
+    "book": "Psalm",
+    "chapter": 119,
+    "verse": 105,
+    "text": "Thy word is a lamp unto my feet, and a light unto my path."
+  },
+  {
+    "book": "Matthew",
+    "chapter": 5,
+    "verse": 16,
+    "text": "Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven."
+  },
+  {
+    "book": "Acts",
+    "chapter": 1,
+    "verse": 8,
+    "text": "But ye shall receive power, after that the Holy Ghost is come upon you: and ye shall be witnesses unto me both in Jerusalem, and in all Judaea, and in Samaria, and unto the uttermost part of the earth."
+  }
+]
