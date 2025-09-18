@@ -22,7 +22,7 @@ def setup_pinecone_free():
     print("   - Metric: cosine")
     print("4. Get your API key from dashboard")
     print("5. Add to Render environment variables:")
-    print("   PINECONE_API_KEY=pcsk_326tCR_Pk5uKTXzXaJRaytxrd9xRi3roi3Ly34PR1cHFrWTKQhx6JfVCfFzny1gHFC1cN9")
+    print("   PINECONE_API_KEY=your_api_key_here")
     print("   PINECONE_INDEX_NAME=bible-verses")
     print()
 

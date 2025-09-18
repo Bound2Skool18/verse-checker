@@ -24,10 +24,10 @@ def main():
         print("❌ PINECONE_API_KEY environment variable not set!")
         print()
         print("Please set your Pinecone API key first:")
-        print("export PINECONE_API_KEY='pcsk_326tCR_Pk5uKTXzXaJRaytxrd9xRi3roi3Ly34PR1cHFrWTKQhx6JfVCfFzny1gHFC1cN9'")
+        print("export PINECONE_API_KEY='your_api_key_here'")
         print()
         print("Or add it to your shell profile (~/.zshrc or ~/.bashrc):")
-        print("echo 'export PINECONE_API_KEY=\"pcsk_326tCR_Pk5uKTXzXaJRaytxrd9xRi3roi3Ly34PR1cHFrWTKQhx6JfVCfFzny1gHFC1cN9\"' >> ~/.zshrc")
+        print("echo 'export PINECONE_API_KEY=\"your_api_key_here\"' >> ~/.zshrc")
         return
     
     # Load Bible data
