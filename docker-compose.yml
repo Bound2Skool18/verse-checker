@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  verse-checker:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=INFO
+    volumes:
+      - qdrant_data:/app/qdrant_data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  qdrant_data:
+
+networks:
+  default:
+    name: verse-checker-network
