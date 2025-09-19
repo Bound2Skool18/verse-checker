@@ -1,27 +1,23 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 import os
-import asyncio
-import time
-from app.config import (
-    API_TITLE, API_DESCRIPTION, API_VERSION, logger
-)
-from app.embedding import get_model
-import traceback
+import logging
+
+# Simple logging setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title=API_TITLE,
-    description=API_DESCRIPTION + " - Powered by Pinecone",
-    version=API_VERSION
+    title="Bible Verse Checker API",
+    description="Check if quotes come from the Bible - Lightweight Version",
+    version="1.0.0"
 )
 
-# Global variables for lazy initialization
+# Global variables
 model = None
-pinecone_ready = False
-population_in_progress = False
-upload_status = {"uploaded": 0, "total": 0, "current_book": ""}
+upload_status = {"uploaded": 0, "total": 31102, "current_book": "Loading..."}
 
 class Query(BaseModel):
     quote: str = Field(
@@ -39,283 +35,198 @@ class VerificationResult(BaseModel):
     text: str = Field(description="The actual Bible verse text")
     message: Optional[str] = Field(None, description="Additional message or explanation")
 
-async def populate_pinecone_robust():
-    """Robust Pinecone population with progress tracking and retry logic."""
-    global pinecone_ready, population_in_progress, model, upload_status
-    
-    try:
-        population_in_progress = True
-        logger.info("Starting ROBUST Pinecone population with retry logic...")
-        
-        # Load model if not already loaded
-        if model is None:
-            logger.info("Loading embedding model...")
-            model = get_model()
-            logger.info("✅ Embedding model loaded successfully")
-        
-        # Check if we should use Pinecone
-        if not os.getenv("PINECONE_API_KEY"):
-            logger.warning("No Pinecone API key found")
-            population_in_progress = False
-            return
-            
-        from app.pinecone_store import create_index_if_not_exists, get_index_stats
-        
-        # Create/connect to index
-        logger.info("Connecting to Pinecone index...")
-        index = create_index_if_not_exists()
-        stats = get_index_stats()
-        
-        current_vectors = stats.get('total_vectors', 0)
-        logger.info(f"Current Pinecone vectors: {current_vectors}")
-        
-        # Check if we need to upload
-        if current_vectors >= 31000:  # Allow for some variance
-            logger.info(f"✅ Pinecone already has {current_vectors} verses - skipping upload")
-            pinecone_ready = True
-            population_in_progress = False
-            return
-            
-        # Load Bible data
-        import json
-        from pathlib import Path
-        
-        bible_file = Path(__file__).parent.parent / "data" / "bible_complete.json"
-        if not bible_file.exists():
-            logger.error("❌ Bible data file not found")
-            population_in_progress = False
-            return
-            
-        logger.info("📖 Loading complete Bible dataset...")
-        with open(bible_file, 'r', encoding='utf-8') as f:
-            verses_data = json.load(f)
-        
-        total_verses = len(verses_data)
-        upload_status["total"] = total_verses
-        logger.info(f"✅ Loaded {total_verses} Bible verses from file")
-        
-        # Upload with robust batching and progress tracking
-        success = await upload_verses_robust(verses_data, model, index)
-        
-        if success:
-            # Verify final count
-            final_stats = get_index_stats()
-            final_count = final_stats.get('total_vectors', 0)
-            logger.info(f"🎉 Upload complete! Final verse count: {final_count}")
-            
-            if final_count >= total_verses * 0.95:  # Allow 5% tolerance
-                pinecone_ready = True
-                logger.info("✅ Bible verse database is now ready!")
-            else:
-                logger.warning(f"⚠️ Upload incomplete: {final_count}/{total_verses}")
-        else:
-            logger.error("❌ Upload failed")
-            
-        population_in_progress = False
-        
-    except Exception as e:
-        logger.error(f"❌ Background population failed: {str(e)}")
-        logger.debug(f"Full error: {traceback.format_exc()}")
-        population_in_progress = False
-
-async def upload_verses_robust(verses_data, model, index):
-    """Upload verses with robust batching and error handling."""
-    global upload_status
-    
-    try:
-        from pinecone import Pinecone
-        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index = pc.Index("bible-verses")
-        
-        batch_size = 50  # Smaller batches for reliability
-        total_verses = len(verses_data)
-        uploaded_count = 0
-        
-        logger.info(f"🚀 Starting upload of {total_verses} verses in batches of {batch_size}")
-        
-        for i in range(0, total_verses, batch_size):
-            batch = verses_data[i:i + batch_size]
-            batch_start = time.time()
-            
-            # Track current book for status
-            if batch:
-                current_book = batch[0].get('book', 'Unknown')
-                upload_status["current_book"] = current_book
-            
-            # Prepare batch for upload
-            vectors_to_upsert = []
-            for j, verse in enumerate(batch):
-                try:
-                    # Create embedding
-                    embedding = model.encode(verse["text"]).tolist()
-                    
-                    # Create vector record
-                    vector_record = {
-                        "id": f"{verse['book']}_{verse['chapter']}_{verse['verse']}",
-                        "values": embedding,
-                        "metadata": {
-                            "book": verse["book"],
-                            "chapter": verse["chapter"],
-                            "verse": verse["verse"],
-                            "text": verse["text"]
-                        }
-                    }
-                    vectors_to_upsert.append(vector_record)
-                    
-                except Exception as e:
-                    logger.error(f"Error processing verse {i+j}: {e}")
-                    continue
-            
-            # Upload batch with retry logic
-            retry_count = 0
-            max_retries = 3
-            
-            while retry_count < max_retries:
-                try:
-                    index.upsert(vectors=vectors_to_upsert)
-                    uploaded_count += len(vectors_to_upsert)
-                    upload_status["uploaded"] = uploaded_count
-                    
-                    batch_time = time.time() - batch_start
-                    progress = (uploaded_count / total_verses) * 100
-                    
-                    logger.info(f"✅ Batch {i//batch_size + 1}: {len(vectors_to_upsert)} verses uploaded "
-                              f"({uploaded_count}/{total_verses}, {progress:.1f}%) "
-                              f"[{batch_time:.1f}s] - {current_book}")
-                    break
-                    
-                except Exception as e:
-                    retry_count += 1
-                    logger.warning(f"⚠️ Batch upload failed (attempt {retry_count}/{max_retries}): {e}")
-                    if retry_count < max_retries:
-                        await asyncio.sleep(2 ** retry_count)  # Exponential backoff
-                    else:
-                        logger.error(f"❌ Failed to upload batch after {max_retries} attempts")
-                        return False
-            
-            # Small delay between batches to avoid rate limits
-            await asyncio.sleep(0.5)
-        
-        logger.info(f"🎉 Successfully uploaded {uploaded_count}/{total_verses} verses")
-        return uploaded_count >= total_verses * 0.95  # 95% success rate acceptable
-        
-    except Exception as e:
-        logger.error(f"❌ Robust upload failed: {e}")
-        return False
-
-def initialize_components_fast():
-    """Quick initialization that doesn't block startup."""
-    global model
-    
-    if model is None:
-        logger.info("Fast init: Loading embedding model...")
-        model = get_model()
-        logger.info("Fast init: ✅ Model loaded")
-
 @app.get("/")
 def root():
     """Root endpoint with basic API information."""
-    if pinecone_ready:
-        status = "ready"
-    elif population_in_progress:
-        progress = upload_status["uploaded"] / max(upload_status["total"], 1) * 100
-        status = f"populating ({progress:.1f}% - {upload_status['current_book']})"
-    else:
-        status = "initializing"
-    
     return {
-        "message": "Bible Verse Checker API",
-        "version": API_VERSION,
-        "vector_store": "Pinecone" if os.getenv("PINECONE_API_KEY") else "Local Qdrant",
-        "status": status,
+        "message": "Bible Verse Checker API - Lightweight",
+        "version": "1.0.0",
+        "status": "online",
         "docs": "/docs",
         "endpoints": {
-            "check": "POST /check - Verify a Bible quote"
+            "check": "POST /check - Verify a Bible quote",
+            "health": "GET /health - Health check",
+            "status": "GET /status - Detailed status"
         }
     }
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint - quick response to avoid timeout."""
-    try:
-        return {
-            "status": "healthy", 
-            "message": "API is responsive",
-            "vector_store": "Pinecone" if os.getenv("PINECONE_API_KEY") else "Local Qdrant",
-            "pinecone_ready": pinecone_ready,
-            "population_in_progress": population_in_progress
-        }
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        raise HTTPException(status_code=503, detail=f"Service unavailable: {str(e)}")
+    """Health check endpoint - always responds quickly."""
+    return {
+        "status": "healthy", 
+        "message": "API is responsive",
+        "service": "lightweight_mode",
+        "timestamp": "2025-01-19T14:30:00Z"
+    }
 
-@app.get("/status")
+@app.get("/status")  
 def get_status():
-    """Detailed status endpoint with upload progress."""
+    """Status endpoint with current information."""
     try:
-        if os.getenv("PINECONE_API_KEY") and pinecone_ready:
-            from app.pinecone_store import get_index_stats
-            stats = get_index_stats()
-            total_verses = stats.get('total_vectors', 0)
+        # Try to check Pinecone if API key is available
+        pinecone_status = "unknown"
+        verse_count = 0
+        
+        api_key = os.getenv("PINECONE_API_KEY")
+        if api_key:
+            try:
+                from pinecone import Pinecone
+                pc = Pinecone(api_key=api_key)
+                index = pc.Index("bible-verses")
+                stats = index.describe_index_stats()
+                verse_count = stats.total_vector_count
+                pinecone_status = "connected"
+            except Exception as e:
+                pinecone_status = f"error: {str(e)[:50]}"
         else:
-            total_verses = upload_status["uploaded"]
-            
+            pinecone_status = "no_api_key"
+        
+        progress = (verse_count / 31102) * 100 if verse_count > 0 else 0
+        
         return {
-            "pinecone_ready": pinecone_ready,
-            "population_in_progress": population_in_progress,
-            "total_verses": total_verses,
-            "model_loaded": model is not None,
-            "upload_progress": {
-                "uploaded": upload_status["uploaded"],
-                "total": upload_status["total"],
-                "current_book": upload_status["current_book"],
-                "percentage": round(upload_status["uploaded"] / max(upload_status["total"], 1) * 100, 1)
-            }
+            "service_mode": "lightweight",
+            "pinecone_status": pinecone_status,
+            "total_verses": verse_count,
+            "target_verses": 31102,
+            "progress_percentage": round(progress, 1),
+            "upload_active": verse_count > 0 and verse_count < 31102,
+            "fully_loaded": verse_count >= 31102
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "service_mode": "lightweight"}
 
 @app.post("/check", response_model=VerificationResult)
 def check_quote(query: Query):
-    """Check if a quote comes from the Bible."""
+    """Check if a quote comes from the Bible - Lightweight version."""
     try:
-        # Quick check if system is ready
-        if not pinecone_ready and not population_in_progress:
-            # Start background population if not started
-            asyncio.create_task(populate_pinecone_robust())
-            
-        # If Pinecone isn't ready, return a helpful message
-        if not pinecone_ready:
-            progress = upload_status["uploaded"] / max(upload_status["total"], 1) * 100
+        # Check if we have Pinecone access
+        api_key = os.getenv("PINECONE_API_KEY")
+        if not api_key:
             return {
                 "match": False,
                 "score": 0.0,
-                "reference": "System Initializing",
-                "text": f"Bible verse database is loading ({progress:.1f}% complete - {upload_status['current_book']}). Please try again in a few minutes.",
-                "message": f"System is populating the Bible verse database. Progress: {progress:.1f}% complete."
+                "reference": "Service Configuration",
+                "text": "API key not configured",
+                "message": "Pinecone API key is not set up. Please configure the service."
             }
         
-        # Ensure model is loaded
-        if model is None:
-            initialize_components_fast()
+        # Try to connect to Pinecone
+        try:
+            from pinecone import Pinecone
+            pc = Pinecone(api_key=api_key)
+            index = pc.Index("bible-verses")
+            stats = index.describe_index_stats()
+            verse_count = stats.total_vector_count
+        except Exception as e:
+            return {
+                "match": False,
+                "score": 0.0,
+                "reference": "Service Error",
+                "text": f"Could not connect to database: {str(e)[:100]}",
+                "message": "Database connection failed. Please try again later."
+            }
         
-        logger.info(f"Processing quote: {query.quote[:50]}...")
+        # Check if database has verses
+        if verse_count == 0:
+            return {
+                "match": False,
+                "score": 0.0,
+                "reference": "Database Empty",
+                "text": "No Bible verses loaded yet",
+                "message": "The Bible verse database is empty. Upload is needed."
+            }
         
-        if os.getenv("PINECONE_API_KEY") and pinecone_ready:
-            # Use Pinecone
-            from app.pinecone_store import search_verse_pinecone
-            result = search_verse_pinecone(query.quote, model)
+        # If we have some verses but not all, warn about limited coverage
+        if verse_count < 31102:
+            progress = (verse_count / 31102) * 100
+            coverage_msg = f"Database is {progress:.1f}% loaded ({verse_count:,}/31,102 verses). Results may be limited."
         else:
-            # Fallback to local Qdrant
-            from app.vector_store import get_client, search_verse
-            client = get_client()
-            result = search_verse(client, model, query.quote)
+            coverage_msg = "Full Bible database available."
         
-        logger.info(f"Search completed with score: {result.get('score', 0):.3f}")
-        return result
+        # Load model for embedding (lightweight approach)
+        global model
+        if model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+                model = SentenceTransformer('all-MiniLM-L6-v2')
+                logger.info("✅ Model loaded successfully")
+            except Exception as e:
+                return {
+                    "match": False,
+                    "score": 0.0,
+                    "reference": "Model Error",
+                    "text": f"Could not load AI model: {str(e)[:100]}",
+                    "message": "AI model loading failed. Please try again later."
+                }
+        
+        # Create query embedding
+        try:
+            query_embedding = model.encode(query.quote).tolist()
+        except Exception as e:
+            return {
+                "match": False,
+                "score": 0.0,
+                "reference": "Processing Error",
+                "text": f"Could not process quote: {str(e)[:100]}",
+                "message": "Quote processing failed. Please try a different quote."
+            }
+        
+        # Search in Pinecone
+        try:
+            search_results = index.query(
+                vector=query_embedding,
+                top_k=1,
+                include_metadata=True
+            )
+            
+            if not search_results.matches:
+                return {
+                    "match": False,
+                    "score": 0.0,
+                    "reference": "No Match",
+                    "text": "No similar verse found",
+                    "message": f"No matching Bible verse found. {coverage_msg}"
+                }
+            
+            # Get best match
+            best_match = search_results.matches[0]
+            similarity_score = float(best_match.score)
+            metadata = best_match.metadata
+            
+            # Determine if it's a match (threshold: 0.7)
+            is_match = similarity_score >= 0.7
+            
+            # Format reference
+            reference = f"{metadata['book']} {metadata['chapter']}:{metadata['verse']}"
+            
+            # Create response message
+            if is_match:
+                message = f"Strong match found! This appears to be from {reference}. {coverage_msg}"
+            elif similarity_score >= 0.6:
+                message = f"Possible match from {reference}. Similarity: {similarity_score:.3f}. {coverage_msg}"
+            else:
+                message = f"Low similarity score ({similarity_score:.3f}). Possibly not a Bible quote. {coverage_msg}"
+            
+            return {
+                "match": is_match,
+                "score": round(similarity_score, 4),
+                "reference": reference,
+                "text": metadata["text"],
+                "message": message
+            }
+            
+        except Exception as e:
+            return {
+                "match": False,
+                "score": 0.0,
+                "reference": "Search Error",
+                "text": f"Search failed: {str(e)[:100]}",
+                "message": "Database search failed. Please try again later."
+            }
+        
     except Exception as e:
         logger.error(f"Error processing quote: {str(e)}")
-        logger.debug(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500, 
             detail="Internal server error while processing quote"
@@ -323,21 +234,18 @@ def check_quote(query: Query):
 
 @app.on_event("startup")
 async def startup_event():
-    """Quick startup - don't wait for Pinecone population."""
-    logger.info(f"Starting {API_TITLE} v{API_VERSION}")
-    try:
-        # Fast initialization
-        initialize_components_fast()
-        
-        # Start background population but don't wait for it
-        if os.getenv("PINECONE_API_KEY"):
-            asyncio.create_task(populate_pinecone_robust())
-            
-        logger.info("✅ Application startup completed successfully - Robust Pinecone population starting")
-    except Exception as e:
-        logger.error(f"Startup failed: {str(e)}")
+    """Lightweight startup - no heavy operations."""
+    logger.info("🚀 Starting Bible Verse Checker API - Lightweight Mode")
+    logger.info("✅ Startup completed - Ready to serve requests")
+    # No heavy background tasks - just start up quickly
 
-@app.on_event("shutdown")
+@app.on_event("shutdown") 
 def shutdown_event():
     """Log shutdown information."""
-    logger.info("Shutting down Bible Verse Checker API")
+    logger.info("🛑 Shutting down Bible Verse Checker API")
+
+# Health check for Render
+@app.get("/ping")
+def ping():
+    """Simple ping endpoint for Render health checks."""
+    return {"status": "ok", "message": "pong"}
